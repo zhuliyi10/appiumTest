@@ -1,11 +1,11 @@
 import datetime
 import re
-import sys
 import time
 
 from appium import webdriver
 from appium.options.common.base import AppiumOptions
 from appium.webdriver.common.appiumby import AppiumBy
+from selenium.common import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
@@ -36,69 +36,83 @@ y = driver.get_window_size()['height']
 itemId = 'com.sdu.didi.psnger:id/sfc_wait_list_item_layout'
 shunId = 'com.sdu.didi.psnger:id/sfc_new_order_card_degree_title'
 priceId = 'com.sdu.didi.psnger:id/sfc_order_price_content'
-inviteId = 'com.sdu.didi.psnger:id/sfc_wait_list_send_invit_button'
+inviteSelector = 'new UiSelector().textMatches("立即同行|邀请同行")'
 timeConfirmId = 'com.sdu.didi.psnger:id/time_result_btn'
 confirmSelector = 'new UiSelector().resourceId("com.sdu.didi.psnger:id/btn_main_title").text("确认")'
 # 定义最小顺路度
 defineShun = 95
 # 定义最小订单金额
-definePrice = 80
+definePrice = 65
 # 是否能刷新
 canRefresh = True
 
 item = None
 shun = None
 price = None
+i = 0
+
+
+# 刷新
+def refresh():
+    # 滑动屏幕
+    driver.swipe(x / 2, y / 2, x / 2, y, 200)
+
+
+# 发送邮箱
+def sendMail(title, content):
+    # QQ邮件通知
+    mail = QQMail()
+    mail.sendMail(title, content)
+
 
 while True:
+    i += 1
+    try:
+        # 查找元素
+        item = driver.find_element(By.ID, itemId)
+        shun = item.find_element(By.ID, shunId).text
+        shunNum = int(re.findall(r'\d+', shun)[0])
+        # 顺路不符合目标
+        if shunNum < defineShun:
+            print(datetime.datetime.now(), f'顺路度{shunNum}%,低于{defineShun}%,继续第{i}次刷新')
+            refresh()
+            continue
 
-    for i in range(sys.maxsize):
-        try:
-            if canRefresh:
-                # 滑动屏幕
-                driver.swipe(x / 2, y / 2, x / 2, y, 0)
+        price = item.find_element(By.ID, priceId).text
+        priceNum = float(re.findall(r'\d+\.\d+', price)[0])
 
-            # 查找元素
-            list = driver.find_elements(By.ID, itemId)
-            canRefresh = True
-            if len(list) == 0:
-                time.sleep(2)
-                continue
-            item = list[0]
-            shun = item.find_element(By.ID, shunId).text
-            shunNum = int(re.findall(r'\d+', shun)[0])
-            if shunNum < defineShun:
-                print(datetime.datetime.now(), f'顺路度{shunNum}%,低于{defineShun}%,继续第{i + 1}次刷新')
-                continue
-
-            price = item.find_element(By.ID, priceId).text
-            priceNum = float(re.findall(r'\d+\.\d+', price)[0])
-
-            if priceNum < definePrice:
-                print(datetime.datetime.now(),
-                      f'顺路度{shunNum},价格{priceNum}元,低于{definePrice}元,继续第{i + 1}次刷新')
-                continue
-
+        # 价格不符合目标
+        if priceNum < definePrice:
             print(datetime.datetime.now(),
-                  f'顺路度{shunNum},价格{priceNum}元,找到达到{defineShun}%顺路,{definePrice}元的订单,开始抢单...')
-            break
-        except Exception as e:
-            # 不在订单列表页面
-            print('请回到订单列表页面')
-            time.sleep(2)
-            canRefresh = False
-    # 点击邀请按钮
-    item.find_element(By.ID, inviteId).click()
+                  f'顺路度{shunNum},价格{priceNum}元,低于{definePrice}元,继续第{i}次刷新')
+            refresh()
+            continue
+
+        print(datetime.datetime.now(),
+              f'顺路度{shunNum},价格{priceNum}元,找到达到{defineShun}%顺路,{definePrice}元的订单,开始抢单...')
+        # 点击邀请按钮
+        item.find_element(AppiumBy.ANDROID_UIAUTOMATOR, inviteSelector).click()
+
+    except Exception as e:
+        print(datetime.datetime.now(), f'元素查找异常,继续第{i}次刷新')
+        time.sleep(2)
+        refresh()
+        continue
 
     # 等待确认时间元素出现
-    WebDriverWait(driver, 5).until(
-        EC.presence_of_element_located((AppiumBy.ANDROID_UIAUTOMATOR, confirmSelector))).click()
-    break
+    try:
+        WebDriverWait(driver, 2).until(
+            EC.presence_of_element_located((AppiumBy.ANDROID_UIAUTOMATOR, confirmSelector))).click()
+    except TimeoutException:
+        # 订单已经被抢走
+        print(datetime.datetime.now(), f'订单已经被抢走,继续第{i}次刷新')
+        refresh()
+        continue
 
-print("抢单成功")
-# QQ邮件通知
-mail = QQMail()
-mail.sendMail('滴滴抢单成功提示', f'已抢到顺路{shun}、价格{price}的订单')
+    # 默认抢单成功
+    print("抢单成功")
+    sendMail('滴滴抢单成功提示', f'已抢到顺路{shun}、价格{price}的订单')
+    break
 # 退出驱动程序
 print('退出程序')
 driver.quit()
