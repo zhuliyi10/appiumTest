@@ -1,14 +1,14 @@
-import datetime
 import re
 import time
+from datetime import datetime
 
 from appium import webdriver
 from appium.options.common.base import AppiumOptions
 from appium.webdriver.common.appiumby import AppiumBy
-from selenium.common import TimeoutException
-from selenium.webdriver.common.by import By
+from lxml import etree
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
+from uiautomator2.xpath import TimeoutException
 
 from send_mail import QQMail
 
@@ -32,19 +32,25 @@ print('driver has init')
 x = driver.get_window_size()['width']
 y = driver.get_window_size()['height']
 
-# 定义元素ID
+# 定义元素Xpath
+itemsXpath = '//android.view.ViewGroup[@resource-id="com.sdu.didi.psnger:id/sfc_wait_list_item_layout"]'
+shunXpath = '//android.widget.TextView[@resource-id="com.sdu.didi.psnger:id/sfc_new_order_card_degree_title"]'
+priceXpath = '//android.widget.TextView[@resource-id="com.sdu.didi.psnger:id/sfc_order_price_content"]'
+orderTimeXpath = '//android.widget.TextView[@resource-id="com.sdu.didi.psnger:id/sfc_new_order_card_time_title"]'
+fromAddressXPath = '//android.widget.TextView[@resource-id="com.sdu.didi.psnger:id/from_tv"]'
+fromDistanceXpath = '//android.widget.TextView[@resource-id="com.sdu.didi.psnger:id/from_tv_tag"]'
+toAddressXPath = '//android.widget.TextView[@resource-id="com.sdu.didi.psnger:id/to_tv"]'
+toDistanceXpath = '//android.widget.TextView[@resource-id="com.sdu.didi.psnger:id/to_tv_tag"]'
+orderContentXpath = '//android.widget.TextView[@resource-id="com.sdu.didi.psnger:id/sfc_order_card_tips_content"]'
+
 itemId = 'com.sdu.didi.psnger:id/sfc_wait_list_item_layout'
-shunId = 'com.sdu.didi.psnger:id/sfc_new_order_card_degree_title'
-priceId = 'com.sdu.didi.psnger:id/sfc_order_price_content'
 inviteSelector = 'new UiSelector().textMatches("立即同行|邀请同行")'
-timeConfirmId = 'com.sdu.didi.psnger:id/time_result_btn'
 confirmSelector = 'new UiSelector().resourceId("com.sdu.didi.psnger:id/btn_main_title").text("确认")'
+
 # 定义最小顺路度
 defineShun = 95
 # 定义最小订单金额
 definePrice = 80
-# 是否能刷新
-canRefresh = True
 
 item = None
 shun = None
@@ -69,43 +75,46 @@ while True:
     i += 1
     try:
         # 查找元素
-        item = driver.find_element(By.ID, itemId)
-        shun = item.find_element(By.ID, shunId).text
+        source = driver.page_source
+        root = etree.fromstring(source.encode('utf-8'))
+        item = root.xpath(itemsXpath)[0]
+        shun = item.xpath(shunXpath)[0].get('text')
+        price = item.xpath(priceXpath)[0].get('text')
+        fromAddress = item.xpath(fromAddressXPath)[0].get('text')
+        fromDistance = item.xpath(fromDistanceXpath)[0].get('text')
+        toAddress = item.xpath(toAddressXPath)[0].get('text')
+        toDistance = item.xpath(toDistanceXpath)[0].get('text')
+        orderContent = item.xpath(orderContentXpath)[0].get('text')
         shunNum = int(re.findall(r'\d+', shun)[0])
         # 顺路不符合目标
         if shunNum < defineShun:
-            print(datetime.datetime.now(), f'顺路度{shunNum}%,低于{defineShun}%,继续第{i}次刷新')
+            print(datetime.now(), f'顺路度{shunNum}%,低于{defineShun}%,继续第{i}次刷新')
             refresh()
             continue
-
-        price = item.find_element(By.ID, priceId).text
         priceNum = float(re.findall(r'\d+\.\d+', price)[0])
-
         # 价格不符合目标
         if priceNum < definePrice:
-            print(datetime.datetime.now(),
+            print(datetime.now(),
                   f'顺路度{shunNum},价格{priceNum}元,低于{definePrice}元,继续第{i}次刷新')
             refresh()
             continue
 
-        print(datetime.datetime.now(),
-              f'顺路度{shunNum},价格{priceNum}元,找到达到{defineShun}%顺路,{definePrice}元的订单,开始抢单...')
-        # 点击邀请按钮
-        item.find_element(AppiumBy.ANDROID_UIAUTOMATOR, inviteSelector).click()
-
+        print(datetime.now(),
+              f'顺路度:{shun} 价格:{price} 起点位置:{fromAddress} 起点距离:{fromDistance} 终点位置:{toAddress} 终点距离:{toDistance} 拼单详情:{orderContent}')
+        driver.find_element(AppiumBy.ANDROID_UIAUTOMATOR, inviteSelector).click()
     except Exception as e:
-        print(datetime.datetime.now(), f'元素查找异常,继续第{i}次刷新')
+        print(datetime.now(), f'元素查找异常,继续第{i}次刷新')
+        print(e)
         time.sleep(2)
         refresh()
         continue
-
     # 等待确认时间元素出现
     try:
         WebDriverWait(driver, 2).until(
             EC.presence_of_element_located((AppiumBy.ANDROID_UIAUTOMATOR, confirmSelector))).click()
     except TimeoutException:
         # 订单已经被抢走
-        print(datetime.datetime.now(), f'订单已经被抢走,继续第{i}次刷新')
+        print(datetime.now(), f'订单已经被抢走,继续第{i}次刷新')
         refresh()
         continue
 
@@ -113,6 +122,7 @@ while True:
     print("抢单成功")
     sendMail('滴滴抢单成功提示', f'已抢到顺路{shun}、价格{price}的订单')
     break
+
 # 退出驱动程序
-print('退出程序')
+print(datetime.now(),'退出程序')
 driver.quit()

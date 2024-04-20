@@ -19,7 +19,7 @@ options.load_capabilities({
     "appium:automationName": "uiautomator2",
     "platformName": "Android",
     "appPackage": "com.jingyao.easybike",
-    "udid": "192.168.1.5:5555",
+    "udid": "NFQSDYCQROT8SGQ8",
     "waitForIdleTimeout": 100,  # 要加上这个元素，不然查找元素很慢
     # "appActivity": "com.didi.sdk.app.MainActivity",
     "noReset": True
@@ -47,9 +47,9 @@ startDistanceId = 'com.jingyao.easybike:id/tvStartDistanceCross'
 startDistanceId2 = 'com.jingyao.easybike:id/tvStartAddress'
 
 # 定义最小顺路度
-defineShun = 90
+defineShun = 60
 # 定义最小订单金额
-definePrice = 80
+definePrice = 100
 # 是否能刷新
 canRefresh = True
 
@@ -61,7 +61,6 @@ while True:
         try:
             if canRefresh:
                 driver.swipe(x / 2, y * 3 / 5, x / 2, y, 0)
-                time.sleep(1)
 
             # 查找元素
             list = driver.find_elements(By.ID, itemId)
@@ -79,11 +78,11 @@ while True:
 
             if priceNum < definePrice:
                 print(datetime.datetime.now(),
-                      f'顺路度{shunNum},价格{priceNum}元,低于{definePrice}元,继续第{i + 1}次刷新')
+                      f'顺路度{shunNum}%,价格{priceNum}元,低于{definePrice}元,继续第{i + 1}次刷新')
                 continue
 
             print(datetime.datetime.now(),
-                  f'顺路度{shunNum},价格{priceNum}元,找到达到{defineShun}%顺路,{definePrice}元的订单,开始抢单...')
+                  f'顺路度{shunNum}%,价格{priceNum}元,找到达到{defineShun}%顺路,{definePrice}元的订单,开始抢单...')
             break
         except Exception as e:
             # 不在订单列表页面
